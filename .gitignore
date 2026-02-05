@@ -4,3 +4,4 @@ server
 # IDE
 .vscode/
 .idea/
+serverlet/bomberman-server
