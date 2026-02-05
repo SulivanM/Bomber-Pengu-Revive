@@ -249,8 +249,20 @@ func handleAuth(se xml.StartElement, conn ConnWriter) (string, *Player) {
 	config := "<config badWordsUrl=\"\" replacementChar=\"*\" deleteLine=\"false\" floodLimit=\"1000\"/>"
 	player.Send(config)
 
-	userList := server.getUserListXML()
-	player.Send(userList)
+	// Send userList with only the new player to initialize properly
+	// Then send existing players via newPlayer to avoid timing issues
+	selfUserList := fmt.Sprintf("<userList><user name=\"%s\" skill=\"%d\" state=\"%d\"/></userList>", name, player.Skill, player.State)
+	player.Send(selfUserList)
+
+	// Send each existing player as newPlayer instead of in userList
+	// This avoids potential crash in sortPlayerList() if playerRoom isn't ready yet
+	server.mu.RLock()
+	for _, existingPlayer := range server.players {
+		if existingPlayer.Name != name {
+			player.Send(fmt.Sprintf("<newPlayer name=\"%s\" skill=\"%d\" state=\"%d\"/>", existingPlayer.Name, existingPlayer.Skill, existingPlayer.State))
+		}
+	}
+	server.mu.RUnlock()
 
 	// Check if any existing players have ChallengeAll active and send <request> to new player
 	server.mu.RLock()
