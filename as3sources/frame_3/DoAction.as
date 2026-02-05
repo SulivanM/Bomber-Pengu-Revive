@@ -1,0 +1,2 @@
+unloadMovie(DropArea);
+nextFrame();
