@@ -18,7 +18,7 @@ loader_txt = String(Math.round(_root.getBytesLoaded() / _root.getBytesTotal() * 
 preloader.maske._yscale = String(Math.round(_root.getBytesLoaded() / _root.getBytesTotal() * 100));
 var deAdmins = [];
 adminData = new LoadVars();
-adminData.load("http://bomberman.speeleiland.nl/admins.txt");
+adminData.load("http://127.0.0.1:8080/admins.txt");
 adminData.onLoad = function()
 {
    if(adminData.len != undefined)
