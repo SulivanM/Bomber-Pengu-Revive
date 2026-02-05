@@ -4,7 +4,6 @@
 <head>
     <meta charset="UTF-8">
     <title>Bomer Pengu</title>
-    <script src="https://unpkg.com/@ruffle-rs/ruffle"></script>
     <style>
         html,
         body {
@@ -18,30 +17,14 @@
             align-items: center;
         }
     </style>
+    <script src="https://unpkg.com/@ruffle-rs/ruffle"></script>
 </head>
 
 <body>
-    <div id="container"></div>
-    <script>
-        window.RufflePlayer = window.RufflePlayer || {};
-        window.addEventListener("load", (event) => {
-            const ruffle = window.RufflePlayer.newest();
-            const player = ruffle.createPlayer();
-            const container = document.getElementById("container");
-            container.appendChild(player);
-            player.load({
-                url: "jkl39202sk.swf",
-                parameters: {
-                    surl: "127.0.0.1",
-                    sport: "6897",
-                    sound: "1"
-                },
-                backgroundColor: "#ffffff",
-            });
-            player.style.width = "640px";
-            player.style.height = "640px";
-        });
-    </script>
+    <embed id="ruffle" src="jkl39202sk.swf" width="640" height="640" quality="high"
+        bgcolor="#ffffff" type="application/x-shockwave-flash"
+        flashvars="surl=127.0.0.1&sport=6897&sound=1"
+        allowscriptaccess="always" allowfullscreen="true">
 </body>
 
 </html>
