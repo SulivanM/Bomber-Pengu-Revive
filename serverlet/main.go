@@ -252,9 +252,28 @@ func handleAuth(se xml.StartElement, conn ConnWriter) (string, *Player) {
 	userList := server.getUserListXML()
 	player.Send(userList)
 
-	server.broadcastExcept(fmt.Sprintf("<newPlayer name=\"%s\" skill=\"%d\" state=\"%d\"/>", name, player.Skill, player.State), name)
+	// Check if any existing players have ChallengeAll active and send <request> to new player
+	server.mu.RLock()
+	for _, existingPlayer := range server.players {
+		if existingPlayer.Name != name && existingPlayer.ChallengeAll && !existingPlayer.InGame {
+			log.Printf("Player %s has ChallengeAll active, adding %s to challenges and sending request", existingPlayer.Name, name)
+			// Add new player to existing player's challenges
+			server.mu.RUnlock()
+			server.mu.Lock()
+			if server.challenges[existingPlayer.Name] == nil {
+				server.challenges[existingPlayer.Name] = make(map[string]bool)
+			}
+			server.challenges[existingPlayer.Name][name] = true
+			server.mu.Unlock()
+			server.mu.RLock()
+			// Send <request> to new player
+			player.Send(fmt.Sprintf("<request name=\"%s\"/>", existingPlayer.Name))
+		}
+	}
+	server.mu.RUnlock()
 
-	log.Printf("Player authenticated: %s", name)
+	log.Printf("Player authenticated: %s (sending newPlayer broadcast to %d other players)", name, len(server.players)-1)
+	server.broadcastExcept(fmt.Sprintf("<newPlayer name=\"%s\" skill=\"%d\" state=\"%d\"/>", name, player.Skill, player.State), name)
 	return "", player
 }
 
@@ -334,6 +353,7 @@ func handleChallengeAll(player *Player) (string, *Player) {
 	if server.challenges[player.Name] == nil {
 		server.challenges[player.Name] = make(map[string]bool)
 	}
+	player.ChallengeAll = true
 	for name, p := range server.players {
 		if name != player.Name && !p.InGame {
 			server.challenges[player.Name][name] = true
@@ -344,6 +364,7 @@ func handleChallengeAll(player *Player) (string, *Player) {
 	server.broadcastPlayerUpdate(player)
 	server.mu.Unlock()
 
+	log.Printf("Player %s challenged all (%d players)", player.Name, len(server.challenges[player.Name]))
 	return "", player
 }
 
@@ -353,6 +374,7 @@ func handleRemChallengeAll(player *Player) (string, *Player) {
 	}
 
 	server.mu.Lock()
+	player.ChallengeAll = false
 	if server.challenges[player.Name] != nil {
 		for targetName := range server.challenges[player.Name] {
 			if target, exists := server.players[targetName]; exists {
@@ -400,9 +422,11 @@ func handleStartGame(se xml.StartElement, player *Player) (string, *Player) {
 	player.InGame = true
 	player.Opponent = opponent
 	player.State = 3
+	player.ChallengeAll = false
 	opponent.InGame = true
 	opponent.Opponent = player
 	opponent.State = 3
+	opponent.ChallengeAll = false
 
 	delete(server.challenges, player.Name)
 	delete(server.challenges, opponent.Name)
@@ -478,12 +502,14 @@ func handleToRoom(player *Player) (string, *Player) {
 		player.Opponent.InGame = false
 		player.Opponent.Opponent = nil
 		player.Opponent.State = 0
+		player.Opponent.ChallengeAll = false
 		server.broadcastPlayerUpdate(player.Opponent)
 
 		player.Opponent = nil
 	}
 	player.InGame = false
 	player.State = 0
+	player.ChallengeAll = false
 	server.broadcastPlayerUpdate(player)
 	server.mu.Unlock()
 
