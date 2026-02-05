@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/gorilla/websocket"
 )
 
 type Server struct {
@@ -22,6 +24,12 @@ type Server struct {
 }
 
 var server *Server
+
+var upgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool {
+		return true // Allow all origins for local development
+	},
+}
 
 func main() {
 	server = &Server{
@@ -86,7 +94,78 @@ func handleClient(conn net.Conn) {
 	}
 }
 
-func processMessage(message string, player *Player, conn net.Conn) (string, *Player) {
+func handleWebSocket(w http.ResponseWriter, r *http.Request) {
+	ws, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Println("WebSocket upgrade error:", err)
+		return
+	}
+	defer ws.Close()
+
+	wsConn := &WebSocketConn{ws: ws}
+	var player *Player
+
+	log.Println("WebSocket client connected")
+
+	for {
+		_, message, err := ws.ReadMessage()
+		if err != nil {
+			if player != nil {
+				server.removePlayer(player)
+			}
+			log.Println("WebSocket read error:", err)
+			return
+		}
+
+		msg := strings.TrimSpace(string(message))
+		if msg == "" {
+			continue
+		}
+
+		// Handle null byte terminator that Flash XMLSocket might send
+		msg = strings.TrimRight(msg, "\x00")
+
+		log.Printf("WebSocket received: %s", msg)
+
+		response, newPlayer := processMessage(msg, player, wsConn)
+		if newPlayer != nil {
+			player = newPlayer
+		}
+
+		if response != "" {
+			// Send response with null byte terminator for Flash compatibility
+			err = ws.WriteMessage(websocket.TextMessage, []byte(response+"\x00"))
+			if err != nil {
+				log.Println("WebSocket write error:", err)
+				if player != nil {
+					server.removePlayer(player)
+				}
+				return
+			}
+		}
+	}
+}
+
+// WebSocketConn wraps a WebSocket connection to implement net.Conn-like interface
+type WebSocketConn struct {
+	ws *websocket.Conn
+	mu sync.Mutex
+}
+
+func (c *WebSocketConn) Write(p []byte) (int, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// Remove trailing newline and add null terminator for Flash compatibility
+	msg := strings.TrimRight(string(p), "\n") + "\x00"
+	err := c.ws.WriteMessage(websocket.TextMessage, []byte(msg))
+	if err != nil {
+		return 0, err
+	}
+	return len(p), nil
+}
+
+func processMessage(message string, player *Player, conn ConnWriter) (string, *Player) {
 	decoder := xml.NewDecoder(strings.NewReader(message))
 	token, err := decoder.Token()
 	if err != nil {
@@ -133,7 +212,7 @@ func processMessage(message string, player *Player, conn net.Conn) (string, *Pla
 	return "", player
 }
 
-func handleAuth(se xml.StartElement, conn net.Conn) (string, *Player) {
+func handleAuth(se xml.StartElement, conn ConnWriter) (string, *Player) {
 	var name, hash string
 	for _, attr := range se.Attr {
 		switch attr.Name.Local {
@@ -520,11 +599,13 @@ func (s *Server) removePlayer(player *Player) {
 }
 
 func startHTTPServer() {
+	http.HandleFunc("/ws", handleWebSocket)
 	http.HandleFunc("/admins.txt", handleAdmins)
 	http.HandleFunc("/badwords.txt", handleBadWords)
 	http.Handle("/", http.FileServer(http.Dir("../")))
 
 	log.Println("HTTP server listening on :8080")
+	log.Println("WebSocket endpoint available at ws://localhost:8080/ws")
 	if err := http.ListenAndServe(":8080", nil); err != nil {
 		log.Fatal("HTTP server error:", err)
 	}

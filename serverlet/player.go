@@ -2,14 +2,18 @@ package main
 
 import (
 	"log"
-	"net"
 	"sync"
 	"time"
 )
 
+// ConnWriter is an interface for connections that can write data
+type ConnWriter interface {
+	Write([]byte) (int, error)
+}
+
 type Player struct {
 	Name     string
-	Conn     net.Conn
+	Conn     ConnWriter
 	State    int
 	Skill    int
 	Hash     string

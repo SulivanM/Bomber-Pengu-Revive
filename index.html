@@ -18,6 +18,18 @@
         }
     </style>
     <script src="https://unpkg.com/@ruffle-rs/ruffle"></script>
+    <script>
+        window.RufflePlayer = window.RufflePlayer || {};
+        window.RufflePlayer.config = {
+            "socketProxy": [
+                {
+                    "host": "127.0.0.1",
+                    "port": 6897,
+                    "proxyUrl": "ws://localhost:8080/ws"
+                }
+            ]
+        };
+    </script>
 </head>
 
 <body>
