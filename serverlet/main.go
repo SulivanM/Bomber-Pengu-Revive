@@ -28,8 +28,8 @@ func main() {
 		players:    make(map[string]*Player),
 		games:      make(map[string]*GameSession),
 		challenges: make(map[string]map[string]bool),
-		admins:     []string{"Admin1", "Admin2"},
-		badWords:   []string{"badword1", "badword2"},
+		admins:     []string{},
+		badWords:   []string{},
 	}
 
 	go startHTTPServer()
@@ -169,7 +169,7 @@ func handleAuth(se xml.StartElement, conn net.Conn) (string, *Player) {
 	server.players[name] = player
 	server.mu.Unlock()
 
-	config := "<config badWordsUrl=\"\" replacementChar=\"*\" deleteLine=\"false\" floodLimit=\"1000\"/>"
+	config := "<config badWordsUrl=\"127.0.0.1:8080/badwords.txt\" replacementChar=\"*\" deleteLine=\"false\" floodLimit=\"1000\"/>"
 	player.Send(config)
 
 	userList := server.getUserListXML()
@@ -533,10 +533,14 @@ func startHTTPServer() {
 
 func handleAdmins(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
-	fmt.Fprintf(w, "admins=%s", strings.Join(server.admins, ","))
+	result := fmt.Sprintf("len=%d", len(server.admins))
+	for i, admin := range server.admins {
+		result += fmt.Sprintf("&naam%d=%s", i+1, admin)
+	}
+	fmt.Fprint(w, result)
 }
 
 func handleBadWords(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
-	fmt.Fprintf(w, strings.Join(server.badWords, ","))
+	fmt.Fprintf(w, "badwords=%s", strings.Join(server.badWords, ","))
 }
