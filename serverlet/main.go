@@ -300,6 +300,7 @@ func handleChallenge(se xml.StartElement, player *Player) (string, *Player) {
 
 	server.mu.Lock()
 	target, exists := server.players[targetName]
+	needsUpdate := false
 	if exists && !target.InGame {
 		if server.challenges[player.Name] == nil {
 			server.challenges[player.Name] = make(map[string]bool)
@@ -307,10 +308,13 @@ func handleChallenge(se xml.StartElement, player *Player) (string, *Player) {
 		server.challenges[player.Name][targetName] = true
 		player.State = 1
 		target.Send(fmt.Sprintf("<request name=\"%s\"/>", player.Name))
-		server.broadcastPlayerUpdate(player)
+		needsUpdate = true
 	}
 	server.mu.Unlock()
 
+	if needsUpdate {
+		server.broadcastPlayerUpdate(player)
+	}
 	return "", player
 }
 
@@ -328,11 +332,12 @@ func handleRemChallenge(se xml.StartElement, player *Player) (string, *Player) {
 	}
 
 	server.mu.Lock()
+	needsUpdate := false
 	if server.challenges[player.Name] != nil {
 		delete(server.challenges[player.Name], targetName)
 		if len(server.challenges[player.Name]) == 0 {
 			player.State = 0
-			server.broadcastPlayerUpdate(player)
+			needsUpdate = true
 		}
 	}
 	target, exists := server.players[targetName]
@@ -341,6 +346,9 @@ func handleRemChallenge(se xml.StartElement, player *Player) (string, *Player) {
 	}
 	server.mu.Unlock()
 
+	if needsUpdate {
+		server.broadcastPlayerUpdate(player)
+	}
 	return "", player
 }
 
@@ -361,10 +369,10 @@ func handleChallengeAll(player *Player) (string, *Player) {
 		}
 	}
 	player.State = 1
-	server.broadcastPlayerUpdate(player)
 	server.mu.Unlock()
 
 	log.Printf("Player %s challenged all (%d players)", player.Name, len(server.challenges[player.Name]))
+	server.broadcastPlayerUpdate(player)
 	return "", player
 }
 
@@ -384,9 +392,9 @@ func handleRemChallengeAll(player *Player) (string, *Player) {
 		delete(server.challenges, player.Name)
 	}
 	player.State = 0
-	server.broadcastPlayerUpdate(player)
 	server.mu.Unlock()
 
+	server.broadcastPlayerUpdate(player)
 	return "", player
 }
 
@@ -430,10 +438,10 @@ func handleStartGame(se xml.StartElement, player *Player) (string, *Player) {
 
 	delete(server.challenges, player.Name)
 	delete(server.challenges, opponent.Name)
+	server.mu.Unlock()
 
 	server.broadcastPlayerUpdate(player)
 	server.broadcastPlayerUpdate(opponent)
-	server.mu.Unlock()
 
 	player.Send(fmt.Sprintf("<startGame name=\"%s\"/>", opponent.Name))
 	opponent.Send(fmt.Sprintf("<startGame name=\"%s\"/>", player.Name))
@@ -495,23 +503,28 @@ func handleToRoom(player *Player) (string, *Player) {
 	}
 
 	server.mu.Lock()
+	var opponent *Player
 	if player.Opponent != nil {
 		gameID := getGameID(player, player.Opponent)
 		delete(server.games, gameID)
 
-		player.Opponent.InGame = false
-		player.Opponent.Opponent = nil
-		player.Opponent.State = 0
-		player.Opponent.ChallengeAll = false
-		server.broadcastPlayerUpdate(player.Opponent)
+		opponent = player.Opponent
+		opponent.InGame = false
+		opponent.Opponent = nil
+		opponent.State = 0
+		opponent.ChallengeAll = false
 
 		player.Opponent = nil
 	}
 	player.InGame = false
 	player.State = 0
 	player.ChallengeAll = false
-	server.broadcastPlayerUpdate(player)
 	server.mu.Unlock()
+
+	if opponent != nil {
+		server.broadcastPlayerUpdate(opponent)
+	}
+	server.broadcastPlayerUpdate(player)
 
 	return "", player
 }
@@ -605,21 +618,24 @@ func (s *Server) broadcastPlayerUpdate(player *Player) {
 
 func (s *Server) removePlayer(player *Player) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
+	var opponent *Player
 	if player.Opponent != nil {
 		gameID := getGameID(player, player.Opponent)
 		delete(s.games, gameID)
 
-		player.Opponent.InGame = false
-		player.Opponent.Opponent = nil
-		player.Opponent.State = 0
-		s.broadcastPlayerUpdate(player.Opponent)
+		opponent = player.Opponent
+		opponent.InGame = false
+		opponent.Opponent = nil
+		opponent.State = 0
 	}
 
 	delete(s.players, player.Name)
 	delete(s.challenges, player.Name)
+	s.mu.Unlock()
 
+	if opponent != nil {
+		s.broadcastPlayerUpdate(opponent)
+	}
 	s.broadcast(fmt.Sprintf("<playerLeft name=\"%s\"/>", player.Name))
 	log.Printf("Player disconnected: %s", player.Name)
 }
