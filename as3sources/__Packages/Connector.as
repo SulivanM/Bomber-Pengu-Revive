@@ -5,7 +5,7 @@ class Connector extends MovieClip
    static var players;
    static var xmlSocket;
    static var versionNr = "1.1.0.speil";
-   static var server = "192.168.1.2";
+   static var server = "127.0.0.1";
    static var port = "6897";
    static var connected = false;
    static var disConTxt = "";
