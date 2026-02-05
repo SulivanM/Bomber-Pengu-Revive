@@ -12,15 +12,16 @@ type ConnWriter interface {
 }
 
 type Player struct {
-	Name     string
-	Conn     ConnWriter
-	State    int
-	Skill    int
-	Hash     string
-	LastBeat time.Time
-	InGame   bool
-	Opponent *Player
-	mu       sync.Mutex
+	Name         string
+	Conn         ConnWriter
+	State        int
+	Skill        int
+	Hash         string
+	LastBeat     time.Time
+	InGame       bool
+	Opponent     *Player
+	ChallengeAll bool
+	mu           sync.Mutex
 }
 
 func (p *Player) Send(message string) {
@@ -28,6 +29,7 @@ func (p *Player) Send(message string) {
 	defer p.mu.Unlock()
 
 	if p.Conn != nil {
+		log.Printf("Sending to %s: %s", p.Name, message)
 		_, err := p.Conn.Write([]byte(message + "\n"))
 		if err != nil {
 			log.Printf("Error sending to %s: %v", p.Name, err)
