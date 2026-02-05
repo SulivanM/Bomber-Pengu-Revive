@@ -522,6 +522,7 @@ func (s *Server) removePlayer(player *Player) {
 func startHTTPServer() {
 	http.HandleFunc("/admins.txt", handleAdmins)
 	http.HandleFunc("/badwords.txt", handleBadWords)
+	http.Handle("/", http.FileServer(http.Dir(".")))
 
 	log.Println("HTTP server listening on :8080")
 	if err := http.ListenAndServe(":8080", nil); err != nil {
