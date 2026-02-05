@@ -134,13 +134,11 @@ func processMessage(message string, player *Player, conn net.Conn) (string, *Pla
 }
 
 func handleAuth(se xml.StartElement, conn net.Conn) (string, *Player) {
-	var name, version, hash string
+	var name, hash string
 	for _, attr := range se.Attr {
 		switch attr.Name.Local {
 		case "name":
 			name = attr.Value
-		case "version":
-			version = attr.Value
 		case "hash":
 			hash = attr.Value
 		}
